@@ -23,16 +23,21 @@ export default function MobileTabBar() {
         : "/auth";
 
   const tabs = [
-    { label: "Home", href: "/", icon: Home, active: pathname === "/" },
-    { label: "Search", href: "/search", icon: Search, active: pathname.startsWith("/search") },
-    { label: "Cart", href: "/cart", icon: ShoppingCart, active: pathname.startsWith("/cart"), badge: true },
+    { key: "home", label: "Home", href: "/", icon: Home, active: pathname === "/" },
+    { key: "search", label: "Search", href: "/search", icon: Search, active: pathname.startsWith("/search") },
+    { key: "cart", label: "Cart", href: "/cart", icon: ShoppingCart, active: pathname.startsWith("/cart"), badge: true },
     {
+      key: "saved",
       label: "Saved",
       href: "/dashboard?tab=favorites",
       icon: Heart,
       active: pathname.startsWith("/dashboard"),
     },
     {
+      // Stable key on purpose: the label flips between "Login" and "Account"
+      // when the auth query resolves, and remounting the link mid-tap swallows
+      // the click on mobile (touchstart lands on a node React then replaces).
+      key: "account",
       label: currentUser ? "Account" : "Login",
       href: accountHref,
       icon: UserRound,
@@ -50,9 +55,9 @@ export default function MobileTabBar() {
 
   return (
     <nav className="mtab" aria-label="Mobile tabs">
-      {tabs.map(({ label, href, icon: Icon, active, badge }) => (
+      {tabs.map(({ key, label, href, icon: Icon, active, badge }) => (
         <Link
-          key={label}
+          key={key}
           href={href}
           className={active ? "mtab-link active" : "mtab-link"}
           aria-current={active ? "page" : undefined}
