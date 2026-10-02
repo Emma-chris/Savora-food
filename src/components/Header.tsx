@@ -7,6 +7,7 @@ import {
   Bike,
   Cake,
   CalendarCheck,
+  ChevronRight,
   Cookie,
   CupSoda,
   Heart,
@@ -43,10 +44,13 @@ const links: NavItem[] = [
   { label: "Contact", href: "/contact", icon: Phone },
 ];
 
-const drawerLinks: NavItem[] = [
-  ...links,
+const shopLinks: NavItem[] = [...links];
+
+const savoraLinks: NavItem[] = [
   { label: "My Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Track Order", href: "/track", icon: Bike },
+  { label: "About", href: "/about", icon: Info },
+  { label: "Contact", href: "/contact", icon: Phone },
 ];
 
 function FavoriteCount() {
@@ -68,8 +72,7 @@ export default function Header() {
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  const close = useCallback(() => {
-    if (closing) return;
+  const close = useCallback(() => {    if (closing) return;
     setClosing(true);
     closeTimerRef.current = setTimeout(() => {
       setOpen(false);
@@ -121,6 +124,24 @@ export default function Header() {
       document.body.style.overflow = previous;
     };
   }, [open, drawerId, close]);
+
+  const renderDrawerRow = ({ label, href, icon: Icon }: NavItem) => {
+    const active = isActive(href);
+    return (
+      <Link
+        key={`${href}-${label}`}
+        href={href}
+        className={active ? "active" : undefined}
+        data-status={active ? "active" : undefined}
+        aria-current={active ? "page" : undefined}
+        onClick={close}
+      >
+        <Icon className="hdr-drawer-ico" aria-hidden="true" />
+        {label}
+        <ChevronRight className="hdr-drawer-chev" aria-hidden="true" />
+      </Link>
+    );
+  };
 
   return (
     <header className="site-header">
@@ -234,22 +255,10 @@ export default function Header() {
               <img src="/savora-logo-wide.png" alt="Savora Food" />
             </div>
             <nav className="hdr-drawer-nav" aria-label="Mobile">
-              {drawerLinks.map(({ label, href, icon: Icon }) => {
-                const active = isActive(href);
-                return (
-                  <Link
-                    key={`${href}-${label}`}
-                    href={href}
-                    className={active ? "active" : undefined}
-                    data-status={active ? "active" : undefined}
-                    aria-current={active ? "page" : undefined}
-                    onClick={close}
-                  >
-                    <Icon className="hdr-drawer-ico" aria-hidden="true" />
-                    {label}
-                  </Link>
-                );
-              })}
+              <p className="hdr-sec-label" aria-hidden="true">Shop</p>
+              {shopLinks.map(renderDrawerRow)}
+              <p className="hdr-sec-label" aria-hidden="true">Savora</p>
+              {savoraLinks.map(renderDrawerRow)}
             </nav>
             <div className="hdr-drawer-foot">
               {currentUser ? (

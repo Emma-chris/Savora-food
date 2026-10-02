@@ -1,1 +1,1 @@
-import Header from "./Header"; import Footer from "./Footer"; export default function PageShell({children}:{children:React.ReactNode}){return <div className="shell"><Header/><main className="main">{children}</main><Footer/></div>}
+import Header from "./Header"; import Footer from "./Footer"; import MobileTabBar from "./MobileTabBar"; export default function PageShell({children}:{children:React.ReactNode}){return <div className="shell"><Header/><main className="main">{children}</main><Footer/><MobileTabBar/></div>}
