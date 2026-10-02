@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "db:seed:admin": "tsx scripts/seed.ts --admin-only"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.2",

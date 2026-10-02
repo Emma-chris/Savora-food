@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireSession } from "@/server/auth/guard";
+import { isCloudinaryConfigured, uploadImageToCloudinary } from "@/server/cloudinary";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -16,9 +17,10 @@ function extensionFor(mime: string): string {
 }
 
 /**
- * Local image upload (development/single-server). Files land in
- * `public/uploads/<year>/<month>/` and are served same-origin.
- * INTEGRATION POINT: swap for Cloudinary/S3 when object storage is configured.
+ * Image upload. When Cloudinary env vars are set (production on Vercel),
+ * files go to Cloudinary and a CDN URL is returned. Otherwise files land in
+ * `public/uploads/<year>/<month>/` for local development only — Vercel's
+ * filesystem is ephemeral, so local uploads will not persist in production.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +37,25 @@ export async function POST(request: NextRequest) {
       throw ApiError.validation("Image must be smaller than 5 MB.");
     }
 
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const filename = `${randomUUID()}.${extensionFor(file.type)}`;
+
+    if (isCloudinaryConfigured()) {
+      const uploaded = await uploadImageToCloudinary(bytes, file.type, filename).catch((error) => {
+        throw ApiError.internal(error instanceof Error ? error.message : "Image upload failed.");
+      });
+      return NextResponse.json(
+        ok({ url: uploaded.url, size: file.size, contentType: file.type }),
+        { status: 201 },
+      );
+    }
+
+    if (process.env.VERCEL) {
+      throw ApiError.internal(
+        "Image uploads are not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET.",
+      );
+    }
+
     const now = new Date();
     const dir = path.join(
       process.cwd(),
@@ -45,11 +66,9 @@ export async function POST(request: NextRequest) {
     );
     await mkdir(dir, { recursive: true });
 
-    const name = `${randomUUID()}.${extensionFor(file.type)}`;
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(dir, name), bytes);
+    await writeFile(path.join(dir, filename), bytes);
 
-    const url = `/uploads/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${name}`;
+    const url = `/uploads/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${filename}`;
     return NextResponse.json(ok({ url, size: file.size, contentType: file.type }), { status: 201 });
   } catch (error) {
     const { envelope, status } = toEnvelope(error);

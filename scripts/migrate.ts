@@ -3,14 +3,17 @@ import * as path from "node:path";
 import { config as loadEnv } from "dotenv";
 import postgres from "postgres";
 
+// Local dev reads .env.local first, then .env. Production (Vercel/Render/CI)
+// injects DATABASE_URL directly into the environment, which takes precedence.
 loadEnv({ path: ".env.local" });
+loadEnv({ path: ".env" });
 
 const MIGRATIONS_DIR = path.join(process.cwd(), "src", "server", "migrations");
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) {
-    console.error("✗ DATABASE_URL is not set in .env.local");
+    console.error("✗ DATABASE_URL is not set. Provide it via environment or .env.local");
     process.exit(1);
   }
 

@@ -2,7 +2,10 @@ import { config as loadEnv } from "dotenv";
 import postgres from "postgres";
 import { hashPassword } from "../src/server/auth/password";
 
+// Local dev reads .env.local first, then .env. Production injects real values
+// directly into the environment, which takes precedence.
 loadEnv({ path: ".env.local" });
+loadEnv({ path: ".env" });
 
 const IMAGES = {
   hero: "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1600&q=85",
@@ -635,41 +638,61 @@ async function seedDemoOrdersAndReviews(
   }
 }
 
+async function ensureAdminAccounts(sql: ReturnType<typeof postgres>): Promise<void> {
+  console.log("Ensuring admin accounts…");
+  const adminEmail = process.env.ADMIN_SEED_EMAIL || "admin@savora.food";
+  const adminPassword = process.env.ADMIN_SEED_PASSWORD || "ChangeMe_Admin_123!";
+  await sql`
+    INSERT INTO users (email, password_hash, first_name, last_name, role, status, email_verified_at)
+    VALUES (${adminEmail}, ${await hashPassword(adminPassword)}, 'Savora', 'Admin', 'ADMIN', 'ACTIVE', NOW())
+    ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
+  `;
+
+  const superAdminEmail = process.env.SUPER_ADMIN_SEED_EMAIL || "superadmin@savora.food";
+  const superAdminPassword = process.env.SUPER_ADMIN_SEED_PASSWORD || "ChangeMe_Super_123!";
+  try {
+    await sql`
+      INSERT INTO users (email, password_hash, first_name, last_name, role, status, email_verified_at)
+      VALUES (${superAdminEmail}, ${await hashPassword(superAdminPassword)}, 'Savora', 'Super Admin', 'SUPER_ADMIN', 'ACTIVE', NOW())
+      ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
+    `;
+  } catch {
+    console.log("  (skipped SUPER_ADMIN: run `npm run db:migrate` first)");
+  }
+  console.log("  admin: " + adminEmail);
+  console.log("  super admin: " + superAdminEmail);
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) {
-    console.error("✗ DATABASE_URL is not set in .env.local");
+    console.error("✗ DATABASE_URL is not set. Provide it via environment or .env.local");
+    process.exit(1);
+  }
+
+  // Production-safe mode: `npm run db:seed:admin` creates/updates only the
+  // admin + super admin accounts. Never seeds demo vendors, orders or coupons.
+  const adminOnly =
+    process.argv.includes("--admin-only") || process.env.SEED_ADMIN_ONLY === "1";
+  if (process.env.ALLOW_DEMO_SEED !== "1" && !adminOnly) {
+    console.error(
+      "✗ Refusing to seed demo data. Run with --admin-only (npm run db:seed:admin) in production, " +
+        "or set ALLOW_DEMO_SEED=1 for local/dev seeding.",
+    );
     process.exit(1);
   }
 
   const sql = postgres(databaseUrl, { max: 5, ssl: "require", onnotice: () => {} });
 
   try {
+    await ensureAdminAccounts(sql);
+    if (adminOnly) {
+      console.log("Admin seed complete (admin-only mode, demo data skipped).");
+      return;
+    }
     const demoPassword = "Demo_User_123!";
 
     console.log("Creating demo users…");
-
-    // Admin
-    const adminEmail = process.env.ADMIN_SEED_EMAIL || "admin@savora.food";
-    const adminPassword = process.env.ADMIN_SEED_PASSWORD || "ChangeMe_Admin_123!";
-    await sql`
-      INSERT INTO users (email, password_hash, first_name, last_name, role, status, email_verified_at)
-      VALUES (${adminEmail}, ${await hashPassword(adminPassword)}, 'Savora', 'Admin', 'ADMIN', 'ACTIVE', NOW())
-      ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
-    `;
-
-    // Super admin (fullest access)
-    const superAdminEmail = process.env.SUPER_ADMIN_SEED_EMAIL || "superadmin@savora.food";
-    const superAdminPassword = process.env.SUPER_ADMIN_SEED_PASSWORD || "ChangeMe_Super_123!";
-    if (await sql`SELECT 1 FROM roles WHERE name = 'SUPER_ADMIN'`) {
-      await sql`
-        INSERT INTO users (email, password_hash, first_name, last_name, role, status, email_verified_at)
-        VALUES (${superAdminEmail}, ${await hashPassword(superAdminPassword)}, 'Savora', 'Super Admin', 'SUPER_ADMIN', 'ACTIVE', NOW())
-        ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
-      `;
-    } else {
-      console.log("  (skipped SUPER_ADMIN: run `npm run db:migrate` first)");
-    }
 
     // Delivery partner (rider)
     const riderEmail = process.env.RIDER_SEED_EMAIL || "rider@savorafoods.com";
@@ -984,8 +1007,8 @@ async function main() {
     console.log("  " + riderEmail);
     for (const vendor of VENDORS) console.log("  " + vendor.email);
     console.log("  vendor.freshbites@demo.savora.test (pending approval)");
-    console.log("Admin (password from .env.local): " + adminEmail);
-    console.log("Super admin (password from .env.local): " + superAdminEmail);
+    console.log("Admin (password from env): " + (process.env.ADMIN_SEED_EMAIL || "admin@savora.food"));
+    console.log("Super admin (password from env): " + (process.env.SUPER_ADMIN_SEED_EMAIL || "superadmin@savora.food"));
     console.log("");
     console.log("Demo customer id:", customerId || "(missing)");
   } finally {
