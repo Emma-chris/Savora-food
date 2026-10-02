@@ -17,7 +17,7 @@ export default function ProductCard({ item }: { item: CatalogProduct }) {
         <Link href={href} aria-label={item.name}>
           <img className="product-card-img" src={item.image ?? FALLBACK_IMAGE} alt={item.name} />
         </Link>
-        <FavoriteButton />
+        <FavoriteButton productId={item.id} />
         {onSale ? <span className="deal-badge">Deal</span> : null}
       </div>
       <div className="product-card-body">

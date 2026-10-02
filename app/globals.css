@@ -313,6 +313,7 @@ a.order-row:hover{border-color:var(--orange)}
 .deal-badge{position:absolute;left:12px;top:12px;background:#c0392b;color:#fff;border-radius:6px;padding:2px 10px;font-size:12px;font-weight:600}
 .fav-btn{position:absolute;right:12px;top:12px;display:grid;place-items:center;width:36px;height:36px;padding:0;border:0;border-radius:50%;background:#fffdf9e6;backdrop-filter:blur(4px);cursor:pointer;transition:background-color .15s}
 .fav-btn:hover{background:#fffdf9}
+.fav-btn:disabled{opacity:.6;cursor:wait}
 .fav-ico{width:16px;height:16px;color:var(--muted);transition:color .15s,fill .15s}
 .fav-btn.saved .fav-ico{fill:var(--orange);color:var(--orange)}
 @media(min-width:640px){.product-grid{grid-template-columns:repeat(2,1fr)}}
