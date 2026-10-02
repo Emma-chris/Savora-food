@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { Heart, Home, Search, ShoppingCart, UserRound } from "lucide-react";
 import CartCount from "./CartCount";
 import { useCurrentUser } from "@/lib/api/hooks";
-import { dashboardForRole } from "@/lib/savora-api";
 
 /**
  * Fixed bottom tab bar for mobile (Lovable-style). Hidden on desktop where
@@ -15,12 +14,7 @@ export default function MobileTabBar() {
   const pathname = usePathname();
   const { data: currentUser } = useCurrentUser();
 
-  const accountHref =
-    currentUser && currentUser.role !== "CUSTOMER"
-      ? dashboardForRole(currentUser.role)
-      : currentUser
-        ? "/dashboard?tab=overview"
-        : "/auth";
+  const accountHref = currentUser ? "/account/profile" : "/auth";
 
   const tabs = [
     { key: "home", label: "Home", href: "/", icon: Home, active: pathname === "/" },

@@ -646,3 +646,24 @@ a.order-row:hover{border-color:var(--orange)}
 .th-right,.td-right{text-align:right}
 .th-center,.td-center{text-align:center}
 .table .muted-small{color:var(--muted);font-size:13px}
+
+/* ── Mobile polish: guards + iOS zoom fix + small-screen type ────────────── */
+img{max-width:100%}
+body{overflow-x:clip}
+.banner h1{overflow-wrap:break-word}
+@media(max-width:640px){
+  /* iOS Safari zooms into inputs below 16px; keep the page stable on tap. */
+  .input,.textarea,.hdr-search-input,.catalog-select,.sort-select,
+  .auth-field input,.auth-field textarea,.auth-select,
+  .filters input,.filters select,
+  .form-card input,.form-card textarea,.form-card select{font-size:16px}
+  .banner h1{font-size:30px}
+  .cart-item img{width:84px;height:72px}
+  .form-card{padding:18px}
+  .two-col{gap:18px}
+}
+@media(max-width:380px){
+  .banner h1{font-size:26px}
+  .hdr-actions{gap:0}
+  .event-chip{padding:7px 12px;font-size:13px}
+}

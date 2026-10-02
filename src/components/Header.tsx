@@ -29,7 +29,6 @@ import HeaderSearch from "./HeaderSearch";
 import CartCount from "./CartCount";
 import SignOutButton from "./SignOutButton";
 import { useCurrentUser, useFavorites } from "@/lib/api/hooks";
-import { dashboardForRole } from "@/lib/savora-api";
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
 
@@ -117,10 +116,9 @@ export default function Header() {
 
   const firstName =
     currentUser?.firstName?.trim().split(" ")[0] || "Account";
-  const dashboardHref =
-    currentUser && currentUser.role !== "CUSTOMER"
-      ? dashboardForRole(currentUser.role)
-      : "/dashboard?tab=overview";
+  // Account entry points always land on account settings. Role dashboards stay
+  // reachable from the drawer's "My Dashboard" row and the bottom tab bar.
+  const accountHref = "/account/profile";
 
   useEffect(() => {
     if (!open) return;
@@ -213,8 +211,8 @@ export default function Header() {
           {currentUser ? (
             <Link
               className="hdr-account"
-              href={dashboardHref}
-              aria-label={`My Dashboard (${firstName})`}
+              href={accountHref}
+              aria-label={`Account settings (${firstName})`}
             >
               <LayoutDashboard className="hdr-ico" aria-hidden="true" /> {firstName}
             </Link>
@@ -293,12 +291,12 @@ export default function Header() {
                 <>
                   <Link
                     className="hdr-drawer-account"
-                    href={dashboardHref}
+                    href={accountHref}
                     onClick={close}
-                    aria-label={`My Dashboard (${firstName})`}
+                    aria-label={`Account settings (${firstName})`}
                   >
                     <LayoutDashboard className="hdr-drawer-ico" aria-hidden="true" />
-                    {firstName}&rsquo;s Dashboard
+                    {firstName}&rsquo;s Account
                   </Link>
                   <div onClick={close}>
                     <SignOutButton className="hdr-drawer-signout" />
