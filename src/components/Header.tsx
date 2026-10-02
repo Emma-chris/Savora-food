@@ -72,7 +72,15 @@ export default function Header() {
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  const close = useCallback(() => {    if (closing) return;
+  const cancelCloseTimer = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const close = useCallback(() => {
+    if (closing) return;
     setClosing(true);
     closeTimerRef.current = setTimeout(() => {
       setOpen(false);
@@ -82,11 +90,29 @@ export default function Header() {
     }, 180);
   }, [closing]);
 
+  const openDrawer = useCallback(() => {
+    cancelCloseTimer();
+    setClosing(false);
+    setOpen(true);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     };
   }, []);
+
+  // Force-close on navigation (e.g. back/forward buttons) without stealing focus.
+  const firstRenderRef = useRef(true);
+  useEffect(() => {
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      return;
+    }
+    cancelCloseTimer();
+    setClosing(false);
+    setOpen(false);
+  }, [pathname]);
 
   const firstName =
     currentUser?.firstName?.trim().split(" ")[0] || "Account";
@@ -155,7 +181,7 @@ export default function Header() {
           aria-expanded={open}
           aria-controls={drawerId}
           data-state={open ? "open" : "closed"}
-          onClick={() => (open ? close() : setOpen(true))}
+          onClick={() => (open && !closing ? close() : openDrawer())}
         >
           <Menu className="hdr-ico size-5" aria-hidden="true" />
         </button>
