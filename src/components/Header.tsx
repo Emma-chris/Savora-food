@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Bike,
   Cake,
@@ -248,22 +249,23 @@ export default function Header() {
         <HeaderSearch />
       </div>
 
-      {open && (
-        <>
-          <div
-            className="hdr-sheet-overlay"
-            data-state={closing ? "closed" : "open"}
-            aria-hidden="true"
-            onClick={close}
-          />
-          <div
-            className="hdr-sheet"
-            role="dialog"
-            data-state={closing ? "closed" : "open"}
-            tabIndex={-1}
-            aria-labelledby={`${drawerId}-title`}
-            id={drawerId}
-          >
+      {open
+        ? createPortal(
+            <>
+              <div
+                className="hdr-sheet-overlay"
+                data-state={closing ? "closed" : "open"}
+                aria-hidden="true"
+                onClick={close}
+              />
+              <div
+                className="hdr-sheet"
+                role="dialog"
+                data-state={closing ? "closed" : "open"}
+                tabIndex={-1}
+                aria-labelledby={`${drawerId}-title`}
+                id={drawerId}
+              >
             <button
               className="hdr-sheet-close"
               type="button"
@@ -316,8 +318,10 @@ export default function Header() {
               )}
             </div>
           </div>
-        </>
-      )}
+        </>,
+        document.body,
+      )
+      : null}
     </header>
   );
 }
