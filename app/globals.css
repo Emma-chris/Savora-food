@@ -145,7 +145,9 @@ a{text-decoration:none;color:inherit} button,input,textarea,select{font:inherit}
 /* Mobile drawer (Sheet left, reference parity: overlay z-50 bg-black/80, w-72 p-0, floating close) */
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .hdr-sheet-overlay{position:fixed;inset:0;z-index:50;background:#000000cc;animation:hdr-fade .2s ease-out}
-.hdr-sheet{position:fixed;top:0;bottom:0;left:0;z-index:50;width:18rem;max-width:85vw;background:#ffffff;display:flex;flex-direction:column;gap:16px;padding:0;box-shadow:0 10px 30px #00000033;animation:hdr-slide-in .25s ease-out}
+.hdr-sheet-overlay[data-state="closed"]{animation:hdr-fade-out .18s ease-in forwards}
+.hdr-sheet{position:fixed;top:0;bottom:0;left:0;z-index:50;width:18rem;max-width:85vw;background:#ffffff;display:flex;flex-direction:column;gap:16px;padding:0;padding-bottom:env(safe-area-inset-bottom,0px);box-shadow:0 10px 30px #00000033;animation:hdr-slide-in .25s ease-out}
+.hdr-sheet[data-state="closed"]{animation:hdr-slide-out .18s ease-in forwards}
 .hdr-sheet-close{position:absolute;right:16px;top:16px;display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--ink);opacity:.7;cursor:pointer;transition:opacity .15s,background-color .15s}
 .hdr-sheet-close:hover{opacity:1;background:#f1ede7}
 .hdr-sheet-close:focus-visible{outline:none;box-shadow:0 0 0 2px var(--orange)}
@@ -153,19 +155,32 @@ a{text-decoration:none;color:inherit} button,input,textarea,select{font:inherit}
 .hdr-sheet-title{font-size:18px;font-weight:600}
 .hdr-sheet-head{border-bottom:1px solid var(--line);padding:16px}
 .hdr-sheet-head img{display:block;height:36px;width:auto}
-.hdr-drawer-nav{display:flex;flex-direction:column;gap:2px;padding:8px;overflow-y:auto}
+.hdr-drawer-nav{display:flex;flex-direction:column;flex:1;gap:2px;padding:8px;overflow-y:auto}
 .hdr-drawer-nav a{display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:500;color:var(--ink)}
 .hdr-drawer-nav a:hover{background:#f1ede7}
 .hdr-drawer-nav a.active{background:#f1ede7;color:var(--orange)}
 .hdr-drawer-ico{width:18px;height:18px;flex:none;color:var(--muted)}
 .hdr-drawer-nav a.active .hdr-drawer-ico{color:var(--orange)}
+.hdr-drawer-foot{margin-top:auto;border-top:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:8px}
+.hdr-drawer-login{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600;background:var(--orange);color:#fff}
+.hdr-drawer-login:hover{background:#e65b00}
+.hdr-drawer-login .hdr-drawer-ico{color:#fff}
+.hdr-drawer-register{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600;background:#fff;border:1px solid var(--line);color:var(--ink)}
+.hdr-drawer-register:hover{background:#f1ede7}
+.hdr-drawer-account{display:flex;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600;background:#f1ede7;color:var(--ink)}
+.hdr-drawer-account .hdr-drawer-ico{color:var(--orange)}
+.hdr-drawer-signout{display:block;width:100%;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600;background:#fff;border:1px solid var(--line);color:var(--ink);cursor:pointer}
+.hdr-drawer-signout:hover{background:#f1ede7}
+.hdr-drawer-signout:disabled{opacity:.6;cursor:wait}
 @keyframes hdr-slide-in{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+@keyframes hdr-slide-out{from{transform:translateX(0)}to{transform:translateX(-100%)}}
 @keyframes hdr-fade{from{opacity:0}to{opacity:1}}
+@keyframes hdr-fade-out{from{opacity:1}to{opacity:0}}
 @media(min-width:640px){.hdr-logo img{height:40px}.hdr-login{display:inline-flex}.hdr-account{display:inline-flex}}
 @media(min-width:768px){.hdr-search{display:block}.hdr-mobile-search{display:none}}
 @media(max-width:1023px){.hdr-menu-btn{display:inline-flex}}
 @media(min-width:1024px){.hdr-nav{display:block}}
-@media(max-width:520px){.hdr-bar{padding:0 12px}}
+@media(max-width:520px){.hdr-bar{padding:8px 12px}}
 
 /* Customer dashboard (reference parity: /dashboard?tab=overview) */
 .dash-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}

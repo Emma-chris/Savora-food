@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useCallback } from "react";
 import {
   Bike,
   Cake,
@@ -18,12 +18,14 @@ import {
   ShoppingCart,
   Store,
   User,
+  UserPlus,
   UtensilsCrossed,
   X,
   type LucideIcon,
 } from "lucide-react";
 import HeaderSearch from "./HeaderSearch";
 import CartCount from "./CartCount";
+import SignOutButton from "./SignOutButton";
 import { useCurrentUser, useFavorites } from "@/lib/api/hooks";
 import { dashboardForRole } from "@/lib/savora-api";
 
@@ -57,17 +59,31 @@ function FavoriteCount() {
 export default function Header() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   const drawerId = useId();
   const { data: currentUser } = useCurrentUser();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  const close = () => {
-    setOpen(false);
-    menuBtnRef.current?.focus();
-  };
+  const close = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    closeTimerRef.current = setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+      closeTimerRef.current = null;
+      menuBtnRef.current?.focus();
+    }, 180);
+  }, [closing]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   const firstName =
     currentUser?.firstName?.trim().split(" ")[0] || "Account";
@@ -104,7 +120,7 @@ export default function Header() {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [open, drawerId]);
+  }, [open, drawerId, close]);
 
   return (
     <header className="site-header">
@@ -113,12 +129,12 @@ export default function Header() {
           ref={menuBtnRef}
           className="hdr-icon-btn hdr-menu-btn"
           type="button"
-          aria-label="Open menu"
+          aria-label={open ? "Close menu" : "Open menu"}
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={drawerId}
           data-state={open ? "open" : "closed"}
-          onClick={() => setOpen(true)}
+          onClick={() => (open ? close() : setOpen(true))}
         >
           <Menu className="hdr-ico size-5" aria-hidden="true" />
         </button>
@@ -189,14 +205,14 @@ export default function Header() {
         <>
           <div
             className="hdr-sheet-overlay"
-            data-state="open"
+            data-state={closing ? "closed" : "open"}
             aria-hidden="true"
             onClick={close}
           />
           <div
             className="hdr-sheet"
             role="dialog"
-            data-state="open"
+            data-state={closing ? "closed" : "open"}
             tabIndex={-1}
             aria-labelledby={`${drawerId}-title`}
             id={drawerId}
@@ -235,6 +251,35 @@ export default function Header() {
                 );
               })}
             </nav>
+            <div className="hdr-drawer-foot">
+              {currentUser ? (
+                <>
+                  <Link
+                    className="hdr-drawer-account"
+                    href={dashboardHref}
+                    onClick={close}
+                    aria-label={`My Dashboard (${firstName})`}
+                  >
+                    <LayoutDashboard className="hdr-drawer-ico" aria-hidden="true" />
+                    {firstName}&rsquo;s Dashboard
+                  </Link>
+                  <div onClick={close}>
+                    <SignOutButton className="hdr-drawer-signout" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Link className="hdr-drawer-login" href="/auth" onClick={close}>
+                    <User className="hdr-drawer-ico" aria-hidden="true" />
+                    Login
+                  </Link>
+                  <Link className="hdr-drawer-register" href="/register" onClick={close}>
+                    <UserPlus className="hdr-drawer-ico" aria-hidden="true" />
+                    Create account
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </>
       )}
