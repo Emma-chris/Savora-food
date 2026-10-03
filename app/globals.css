@@ -148,7 +148,7 @@ a{text-decoration:none;color:inherit} button,input,textarea,select{font:inherit}
 .hdr-sheet-overlay[data-state="closed"]{animation:hdr-fade-out .18s ease-in forwards}
 .hdr-sheet{position:fixed;top:0;bottom:0;left:0;z-index:61;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;width:85vw;max-width:24rem;background:#ffffff;border-radius:0 20px 20px 0;display:flex;flex-direction:column;gap:8px;padding:0;padding-bottom:env(safe-area-inset-bottom,0px);box-shadow:0 10px 30px #00000033;animation:hdr-slide-in .25s ease-out;overflow:hidden}
 .hdr-sheet[data-state="closed"]{animation:hdr-slide-out .18s ease-in forwards}
-.hdr-sheet-close{position:absolute;right:12px;top:12px;display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;border-radius:999px;background:#f1ede7;color:var(--ink);opacity:.8;cursor:pointer;transition:opacity .15s,background-color .15s}
+.hdr-sheet-close{position:absolute;right:12px;top:12px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:999px;background:#f1ede7;color:var(--ink);opacity:.8;cursor:pointer;transition:opacity .15s,background-color .15s}
 .hdr-sheet-close:hover{opacity:1;background:#e7e0d6}
 .hdr-sheet-close:focus-visible{outline:none;box-shadow:0 0 0 2px var(--orange)}
 .hdr-sheet-close-ico{width:16px;height:16px;flex:none}
@@ -157,10 +157,10 @@ a{text-decoration:none;color:inherit} button,input,textarea,select{font:inherit}
 .hdr-sheet-head img{display:block;height:36px;width:auto}
 .hdr-sec-label{margin:8px 12px 2px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .hdr-drawer-nav{display:flex;flex-direction:column;flex:1;gap:2px;padding:4px 8px 8px;overflow-y:auto}
-.hdr-drawer-nav a{display:flex;align-items:center;gap:12px;border-radius:12px;padding:8px 10px;font-size:14px;font-weight:500;color:var(--ink)}
+.hdr-drawer-nav a{display:flex;align-items:center;gap:12px;border-radius:12px;padding:8px 10px;min-height:48px;font-size:16px;font-weight:500;color:var(--ink)}
 .hdr-drawer-nav a:hover{background:#f1ede7}
 .hdr-drawer-nav a.active{background:#fff1e6;color:var(--orange);font-weight:600}
-.hdr-drawer-ico{width:32px;height:32px;flex:none;padding:7px;border-radius:10px;background:#f4f0ea;color:var(--muted)}
+.hdr-drawer-ico{width:36px;height:36px;flex:none;padding:8px;border-radius:10px;background:#f4f0ea;color:var(--muted)}
 .hdr-drawer-nav a.active .hdr-drawer-ico{background:var(--orange);color:#fff}
 .hdr-drawer-chev{width:16px;height:16px;flex:none;margin-left:auto;color:#c9c2b8}
 .hdr-drawer-nav a.active .hdr-drawer-chev{color:var(--orange)}

@@ -49,8 +49,6 @@ const shopLinks: NavItem[] = [...links];
 const savoraLinks: NavItem[] = [
   { label: "My Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Track Order", href: "/track", icon: Bike },
-  { label: "About", href: "/about", icon: Info },
-  { label: "Contact", href: "/contact", icon: Phone },
 ];
 
 function FavoriteCount() {
@@ -283,7 +281,7 @@ export default function Header() {
             <nav className="hdr-drawer-nav" aria-label="Mobile">
               <p className="hdr-sec-label" aria-hidden="true">Shop</p>
               {shopLinks.map(renderDrawerRow)}
-              <p className="hdr-sec-label" aria-hidden="true">Savora</p>
+              <p className="hdr-sec-label" aria-hidden="true">Account</p>
               {savoraLinks.map(renderDrawerRow)}
             </nav>
             <div className="hdr-drawer-foot">
@@ -293,10 +291,10 @@ export default function Header() {
                     className="hdr-drawer-account"
                     href={accountHref}
                     onClick={close}
-                    aria-label={`Account settings (${firstName})`}
+                    aria-label={`Profile and settings (${firstName})`}
                   >
                     <LayoutDashboard className="hdr-drawer-ico" aria-hidden="true" />
-                    {firstName}&rsquo;s Account
+                    Profile &amp; Settings
                   </Link>
                   <div onClick={close}>
                     <SignOutButton className="hdr-drawer-signout" />
