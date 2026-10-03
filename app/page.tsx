@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Bike, CalendarCheck, Package, Search, ShieldCheck, Star, Timer, type LucideIcon } from "lucide-react";
+import { ArrowRight, Bike, CalendarCheck, Package, ShieldCheck, type LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
+import HomeHero from "@/components/HomeHero";
 import ProductCard from "@/components/ProductCard";
 import VendorCard from "@/components/VendorCard";
 import CategoryCard from "@/components/CategoryCard";
@@ -11,9 +12,6 @@ import {
   listProducts,
   listVendors,
 } from "@/server/queries/catalog";
-
-const HERO_IMAGE =
-  "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1600&q=85";
 
 const EVENT_TYPES = [
   "Wedding",
@@ -85,49 +83,7 @@ export default async function Home() {
 
   return (
     <PageShell>
-      <section className="hero">
-        <div className="container hero-grid">
-          <div>
-            <div className="hero-badge">Now delivering in Lagos, Abuja, Ibadan &amp; Port Harcourt</div>
-            <h1 className="hero-title">
-              Your Food.
-              <br />
-              Your Choice. <span className="hero-gradient">Delivered.</span>
-            </h1>
-            <p className="hero-lead">
-              Savora Food connects you with restaurants, bakers, snack vendors, drink makers and caterers —
-              order in minutes, pay securely and track every delivery.
-            </p>
-            <form className="hero-search" action="/search" method="get" role="search">
-              <div className="hero-search-field">
-                <Search className="hero-search-icon" aria-hidden="true" />
-                <input
-                  className="hero-search-input"
-                  type="search"
-                  name="q"
-                  placeholder="Search jollof, cakes, small chops, vendors…"
-                  aria-label="Search food and vendors"
-                />
-              </div>
-              <button className="hero-search-btn" type="submit">
-                Find Food <ArrowRight className="hero-search-btn-ico" aria-hidden="true" />
-              </button>
-            </form>
-            <div className="hero-points">
-              <span className="hero-point">
-                <Timer className="text-primary" aria-hidden="true" /> 30-min average delivery
-              </span>
-              <span className="hero-point">
-                <ShieldCheck className="text-accent" aria-hidden="true" /> Secure Naira payments
-              </span>
-              <span className="hero-point">
-                <Star className="text-secondary fill-secondary" aria-hidden="true" /> 4.8 average vendor rating
-              </span>
-            </div>
-          </div>
-          <img className="hero-img" src={HERO_IMAGE} alt="Nigerian food spread" />
-        </div>
-      </section>
+      <HomeHero />
 
       <section className="section container">
         <div className="section-head">
