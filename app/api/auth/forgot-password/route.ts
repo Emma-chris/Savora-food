@@ -27,7 +27,20 @@ export async function POST(request: Request) {
         expiresHours: 1,
       });
       const resetUrl = `${getEnv().appUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
-      await sendPasswordResetEmail(email, resetUrl);
+      try {
+        await sendPasswordResetEmail(email, resetUrl);
+      } catch (mailError) {
+        // The token above is already stored and usable — a mail-provider
+        // outage must not turn this into a 500. Log loudly for ops (this is
+        // where email-delivery alerting should hook in) and still return the
+        // generic success below. The response stays identical either way so
+        // attackers can't probe which emails are registered.
+        console.error("[auth] password-reset email failed:", {
+          userId: user.id,
+          email,
+          error: mailError instanceof Error ? mailError.message : mailError,
+        });
+      }
     }
 
     return NextResponse.json(okMessage("If that email is registered, we've sent a reset link."));
