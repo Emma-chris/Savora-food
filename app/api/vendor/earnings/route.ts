@@ -61,6 +61,11 @@ export async function GET(request: NextRequest) {
     const gross30d = Number(totals[0]?.gross_30d ?? 0);
     const commission30d = Math.round(gross30d * rate) / 100;
 
+    // Wallet (kobo ledger) is the source of truth for withdrawable funds.
+    // The legacy gross-minus-commission figure is kept for display continuity.
+    const { getWallet, koboToNaira } = await import("@/server/wallet");
+    const wallet = await getWallet(vendor.id).catch(() => ({ availableKobo: 0, pendingKobo: 0 }));
+
     return NextResponse.json(
       ok({
         commissionRate: rate,
@@ -77,6 +82,12 @@ export async function GET(request: NextRequest) {
           orders: Number(totals[0]?.orders_all ?? 0),
         },
         availableBalance: Math.max(0, grossAll - Math.round(grossAll * rate) / 100 - paidTotal),
+        wallet: {
+          availableKobo: wallet.availableKobo,
+          available: koboToNaira(wallet.availableKobo),
+          pendingKobo: wallet.pendingKobo,
+          pending: koboToNaira(wallet.pendingKobo),
+        },
         paidOut: paidTotal,
         payouts: payouts.map((payout) => ({
           id: payout.id,

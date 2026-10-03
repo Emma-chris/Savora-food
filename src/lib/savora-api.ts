@@ -576,6 +576,7 @@ export type VendorEarnings = {
   last30Days: { gross: number; commission: number; net: number; orders: number };
   lifetime: { gross: number; commission: number; net: number; orders: number };
   availableBalance: number;
+  wallet?: { availableKobo: number; available: number; pendingKobo: number; pending: number };
   paidOut: number;
   payouts: {
     id: string;
@@ -593,6 +594,80 @@ export type VendorEarnings = {
 
 export function getVendorEarnings() {
   return apiGet<VendorEarnings>("/vendor/earnings").then((result) => result.data);
+}
+
+export type PaystackBankOption = {
+  name: string;
+  slug: string;
+  code: string;
+};
+
+export function listVendorBanks() {
+  return apiGet<PaystackBankOption[]>("/vendor/banks").then((result) => result.data);
+}
+
+export function resolveVendorBankAccount(input: { account_number: string; bank_code: string }) {
+  return apiGet<{ accountNumber: string; accountName: string; bankId: number | null }>(
+    `/vendor/banks/resolve${queryString({ account_number: input.account_number, bank_code: input.bank_code })}`,
+  ).then((result) => result.data);
+}
+
+export type VendorRecipient = {
+  recipientCode: string | null;
+  bankCode: string | null;
+  bankName: string | null;
+  accountName: string | null;
+  accountNumber: string | null;
+  verified: boolean;
+};
+
+export function getVendorRecipient() {
+  return apiGet<VendorRecipient>("/vendor/recipient").then((result) => result.data);
+}
+
+export function saveVendorRecipient(input: { accountNumber: string; bankCode: string }) {
+  return apiSend<{ recipientCode: string; accountName?: string; accountNumber?: string; reused?: boolean }>(
+    "/vendor/recipient",
+    "POST",
+    input,
+  ).then((result) => result.data);
+}
+
+export type VendorWithdrawal = {
+  id: string;
+  amountKobo: number;
+  amount: number;
+  reference: string;
+  transferCode: string | null;
+  status: string;
+  failureReason: string | null;
+  createdAt: string;
+  duplicate?: boolean;
+  message?: string;
+};
+
+export type VendorWithdrawals = {
+  availableKobo: number;
+  available: number;
+  pendingKobo: number;
+  pending: number;
+  limits: {
+    minKobo: number;
+    min: number;
+    maxKobo: number;
+    max: number;
+    autoApproveBelowKobo: number;
+    autoApproveBelow: number;
+  };
+  withdrawals: VendorWithdrawal[];
+};
+
+export function listVendorWithdrawals() {
+  return apiGet<VendorWithdrawals>("/vendor/withdrawals").then((result) => result.data);
+}
+
+export function requestVendorWithdrawal(input: { amountKobo: number; idempotencyKey?: string }) {
+  return apiSend<VendorWithdrawal>("/vendor/withdrawals", "POST", input).then((result) => result.data);
 }
 
 export type VendorAnalytics = {

@@ -290,6 +290,14 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
               ON CONFLICT (order_id) DO NOTHING
             `;
           }
+          // Vendor wallet: credit PENDING (hold period) for this DELIVERED order.
+          // Idempotent per order; failures never fail the delivery itself.
+          try {
+            const { creditVendorForOrder } = await import("@/server/wallet");
+            await creditVendorForOrder(delivery.order_id);
+          } catch {
+            // auditable via missing CREDIT_HOLD ledger entry; delivery stays DELIVERED
+          }
         }
       } catch {
         // ledger failure is auditable via missing order_money_splits row; delivery stays DELIVERED

@@ -27,6 +27,65 @@ function extractReference(payload: Record<string, unknown>): string | null {
   );
 }
 
+function eventKeyFor(payload: Record<string, unknown>, event: string, reference: string | null): string {
+  const data = asRecord(payload.data);
+  const paystackId = data ? (firstString(data.id) ?? (typeof data.id === "number" ? String(data.id) : null)) : null;
+  if (paystackId) return `paystack:${paystackId}`;
+  return `fallback:${event}:${reference ?? "noref"}`;
+}
+
+function extractTransferFields(payload: Record<string, unknown>): {
+  reference: string | null;
+  transferCode: string | null;
+  paystackStatus: string | null;
+  failureReason: string | null;
+} {
+  const data = asRecord(payload.data) ?? {};
+  return {
+    reference: firstString(data.reference) ?? null,
+    transferCode: firstString(data.transfer_code) ?? null,
+    paystackStatus: firstString(data.status) ?? null,
+    failureReason: firstString(data.reason) ?? firstString(data.gateway_response) ?? null,
+  };
+}
+
+async function handleTransferEvent(
+  payload: Record<string, unknown>,
+  event: string,
+): Promise<NextResponse> {
+  const { applyTransferWebhook } = await import("@/server/wallet");
+  const fields = extractTransferFields(payload);
+  if (!fields.reference) {
+    return NextResponse.json({ success: true, message: "Transfer event without reference." });
+  }
+
+  const sql = db();
+  const eventKey = eventKeyFor(payload, event, fields.reference);
+
+  // Idempotency: first delivery wins, replays are no-ops.
+  const inserted = await sql<{ id: string }[]>`
+    INSERT INTO paystack_webhook_events (event_key, event, reference, payload)
+    VALUES (${eventKey}, ${event}, ${fields.reference}, ${sql.json(JSON.parse(JSON.stringify(payload)))})
+    ON CONFLICT (event_key) DO NOTHING
+    RETURNING id
+  `;
+  if (inserted.length === 0) {
+    return NextResponse.json({ success: true, message: "Duplicate event ignored." });
+  }
+
+  const withdrawal = await applyTransferWebhook({
+    event,
+    reference: fields.reference,
+    transferCode: fields.transferCode,
+    paystackStatus: fields.paystackStatus,
+    failureReason: fields.failureReason,
+  });
+  if (!withdrawal) {
+    return NextResponse.json({ success: true, message: "Unmatched withdrawal reference." });
+  }
+  return NextResponse.json({ success: true, message: `Withdrawal ${withdrawal.status}.` });
+}
+
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const signature = request.headers.get("x-paystack-signature");
@@ -37,6 +96,14 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = JSON.parse(rawBody) as Record<string, unknown>;
+    const event = typeof payload.event === "string" ? payload.event : "";
+
+    // Transfer rail (vendor withdrawals). The webhook is the source of truth
+    // for final status — failed/reversed events restore the vendor balance.
+    if (event.startsWith("transfer.")) {
+      return handleTransferEvent(payload, event);
+    }
+
     const reference = extractReference(payload);
     if (!reference) {
       return NextResponse.json({ success: true, message: "No payment reference in event." });

@@ -77,16 +77,21 @@ import {
   listRiderDeliveries,
   listRiderJobs,
   listSuperAdmins,
+  listVendorBanks,
   listVendorCatering,
   listVendorOrders,
   listVendorProducts,
+  listVendorWithdrawals,
   markNotificationsRead,
   quoteCheckout,
   quoteVendorCatering,
   rejectVendorOrder,
   removeCartItem,
   removeFavorite,
+  requestVendorWithdrawal,
   riderDeliveryAction,
+  saveVendorRecipient,
+  getVendorRecipient,
   toggleFavorite,
   updateAccount,
   updateAddress,
@@ -818,6 +823,61 @@ export function useVendorEarnings() {
     retry: false,
     staleTime: 60_000,
     refetchInterval: (data) => livePoll(data),
+  });
+}
+
+export const withdrawalKeys = {
+  withdrawals: ["vendor-withdrawals"] as const,
+  recipient: ["vendor-recipient"] as const,
+  banks: ["vendor-banks"] as const,
+};
+
+export function useVendorBanks() {
+  return useQuery({
+    queryKey: withdrawalKeys.banks,
+    queryFn: listVendorBanks,
+    retry: false,
+    staleTime: 24 * 60 * 60_000,
+  });
+}
+
+export function useVendorRecipient() {
+  return useQuery({
+    queryKey: withdrawalKeys.recipient,
+    queryFn: getVendorRecipient,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveVendorRecipient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { accountNumber: string; bankCode: string }) => saveVendorRecipient(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: withdrawalKeys.recipient });
+    },
+  });
+}
+
+export function useVendorWithdrawals() {
+  return useQuery({
+    queryKey: withdrawalKeys.withdrawals,
+    queryFn: listVendorWithdrawals,
+    retry: false,
+    staleTime: 15_000,
+    refetchInterval: (data) => livePoll(data),
+  });
+}
+
+export function useRequestVendorWithdrawal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { amountKobo: number; idempotencyKey: string }) => requestVendorWithdrawal(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: withdrawalKeys.withdrawals });
+      void queryClient.invalidateQueries({ queryKey: vendorKeys.earnings });
+    },
   });
 }
 
