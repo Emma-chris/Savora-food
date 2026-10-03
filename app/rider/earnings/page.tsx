@@ -1,11 +1,27 @@
 "use client";
 
+import PayoutPanel from "@/components/PayoutPanel";
 import { RiderShell, RiderSignIn, naira } from "@/components/RiderShell";
-import { useRiderEarnings, useRiderProfile } from "@/lib/api/hooks";
+import {
+  useRequestRiderWithdrawal,
+  useRiderEarnings,
+  useRiderProfile,
+  useRiderRecipient,
+  useRiderWithdrawals,
+  usePayoutBanks,
+  useSaveRiderRecipient,
+} from "@/lib/api/hooks";
+import { resolvePayoutBankAccount } from "@/lib/savora-api";
 
 export default function RiderEarningsPage() {
   const profile = useRiderProfile();
   const earnings = useRiderEarnings();
+  // Same payout rail as vendors: bank list, wallet, and withdrawal history.
+  const banks = usePayoutBanks();
+  const recipient = useRiderRecipient();
+  const payouts = useRiderWithdrawals();
+  const saveRecipient = useSaveRiderRecipient();
+  const requestWithdrawal = useRequestRiderWithdrawal();
 
   if (profile.isLoading) {
     return (
@@ -22,7 +38,7 @@ export default function RiderEarningsPage() {
     <RiderShell
       profile={profile.data}
       title="Earnings"
-      sub="You keep the delivery fee on every completed trip."
+      sub="You keep the delivery fee on every confirmed trip."
     >
       {earnings.isLoading ? (
         <p className="muted">Loading earnings…</p>
@@ -40,6 +56,17 @@ export default function RiderEarningsPage() {
             <div className="stat">
               <b>★ {earnings.data.rating.average.toFixed(1)}</b>
               <span>{earnings.data.rating.count} ratings</span>
+            </div>
+          </div>
+
+          <div className="hero-stats">
+            <div className="stat">
+              <b>{naira((payouts.data?.availableKobo ?? 0) / 100)}</b>
+              <span>Available to withdraw</span>
+            </div>
+            <div className="stat">
+              <b>{naira((payouts.data?.pendingKobo ?? 0) / 100)}</b>
+              <span>Pending (hold period)</span>
             </div>
           </div>
 
@@ -79,6 +106,23 @@ export default function RiderEarningsPage() {
               ))}
             </div>
           )}
+
+          <PayoutPanel
+            ownerType="RIDER"
+            subject="rider"
+            overview={payouts.data ?? null}
+            account={recipient.data ?? null}
+            banks={banks.data ?? null}
+            availableKobo={payouts.data?.availableKobo ?? 0}
+            pendingKobo={payouts.data?.pendingKobo ?? 0}
+            saving={saveRecipient.isPending}
+            withdrawing={requestWithdrawal.isPending}
+            onResolveAccount={async (input) =>
+              resolvePayoutBankAccount({ account_number: input.accountNumber, bank_code: input.bankCode })
+            }
+            onSaveAccount={(input) => saveRecipient.mutateAsync(input)}
+            onWithdraw={(input) => requestWithdrawal.mutateAsync(input)}
+          />
         </>
       ) : (
         <p className="auth-error">Could not load earnings.</p>

@@ -62,6 +62,10 @@ import {
   getVendorProfile,
   getVendors,
   getVendorProducts,
+  getRiderRecipient,
+  listRiderWithdrawals,
+  requestRiderWithdrawal,
+  saveRiderRecipient,
   initializePayment,
   listAdminCategories,
   listAdminCoupons,
@@ -77,7 +81,7 @@ import {
   listRiderDeliveries,
   listRiderJobs,
   listSuperAdmins,
-  listVendorBanks,
+  listPayoutBanks,
   listVendorCatering,
   listVendorOrders,
   listVendorProducts,
@@ -832,10 +836,58 @@ export const withdrawalKeys = {
   banks: ["vendor-banks"] as const,
 };
 
-export function useVendorBanks() {
+/** Same payout rail for riders — separate keys so one session never mixes them. */
+export const riderPayoutKeys = {
+  withdrawals: ["rider-withdrawals"] as const,
+  recipient: ["rider-recipient"] as const,
+};
+
+export function useRiderRecipient() {
+  return useQuery({
+    queryKey: riderPayoutKeys.recipient,
+    queryFn: getRiderRecipient,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveRiderRecipient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { accountNumber: string; bankCode: string }) => saveRiderRecipient(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: riderPayoutKeys.recipient });
+      void queryClient.invalidateQueries({ queryKey: riderPayoutKeys.withdrawals });
+    },
+  });
+}
+
+export function useRiderWithdrawals() {
+  return useQuery({
+    queryKey: riderPayoutKeys.withdrawals,
+    queryFn: listRiderWithdrawals,
+    retry: false,
+    staleTime: 15_000,
+    refetchInterval: (data) => livePoll(data),
+  });
+}
+
+export function useRequestRiderWithdrawal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { amountKobo: number; idempotencyKey: string }) => requestRiderWithdrawal(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: riderPayoutKeys.withdrawals });
+      void queryClient.invalidateQueries({ queryKey: ["rider-earnings"] });
+    },
+  });
+}
+
+/** Bank list for any payout form (vendor or rider). */
+export function usePayoutBanks() {
   return useQuery({
     queryKey: withdrawalKeys.banks,
-    queryFn: listVendorBanks,
+    queryFn: listPayoutBanks,
     retry: false,
     staleTime: 24 * 60 * 60_000,
   });

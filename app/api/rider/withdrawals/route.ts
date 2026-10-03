@@ -1,27 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
-import { requireVendor } from "@/server/auth/guard";
-import { getVendorContext } from "@/server/vendors";
+import { ROLES, requireRole } from "@/server/auth/guard";
+import { getRiderContext } from "@/server/riders";
 import { getPayoutOverview, toWithdrawalResponse, withdraw } from "@/server/payouts";
 import type { Owner } from "@/server/wallet";
 
 const bodySchema = z.object({
-  // Integer kobo from the client; re-validated server-side against the
-  // per-owner policy and the locked balance.
+  // Integer kobo from the client; the server re-validates it against the
+  // per-rider policy and the locked wallet balance.
   amountKobo: z.number().int().positive(),
-  // Client-generated id per submit; dedupes double-clicks. The server falls
-  // back to generating one when absent.
   idempotencyKey: z.string().trim().max(100).optional().nullable(),
 });
 
-/** Withdrawal history + wallet for the authenticated vendor. The owner id comes
- *  from the session, never from the request body. */
+/** Rider wallet + limits + bank account + withdrawal history.
+ *  Owner id always comes from the session's rider profile. */
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireVendor(request);
-    const vendor = await getVendorContext(session.id);
-    const owner: Owner = { type: "VENDOR", id: vendor.id };
+    const session = await requireRole(request, [ROLES.DELIVERY_PARTNER]);
+    const rider = await getRiderContext(session.id);
+    const owner: Owner = { type: "RIDER", id: rider.id };
     return NextResponse.json(ok(await getPayoutOverview(owner)));
   } catch (error) {
     const { envelope, status } = toEnvelope(error);
@@ -29,20 +27,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * Vendor withdrawal request. Delegates to the shared owner-agnostic payout
- * service — vendor and rider rails differ only in the owner row.
- */
+/** Rider withdrawal request — the shared payout service, not a rider copy. */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireVendor(request);
-    const vendor = await getVendorContext(session.id);
+    const session = await requireRole(request, [ROLES.DELIVERY_PARTNER]);
+    const rider = await getRiderContext(session.id);
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       throw ApiError.validation("Please fix the errors in your submission.", parsed.error.flatten().fieldErrors);
     }
 
-    const owner: Owner = { type: "VENDOR", id: vendor.id };
+    const owner: Owner = { type: "RIDER", id: rider.id };
     const result = await withdraw({
       owner,
       amountKobo: parsed.data.amountKobo,

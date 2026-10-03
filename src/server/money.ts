@@ -29,6 +29,25 @@ export function normalizePayoutConfig(value: unknown): PayoutConfig {
   };
 }
 
+/**
+ * Raw payout settings, unmapped keys included. normalizePayoutConfig() only
+ * knows the four split keys, so the wallet/withdrawal policy keys (hold days,
+ * per-owner limits, bank-change cooling, cancelled-pickup fee %) MUST be read
+ * from here — otherwise they are silently dropped from the DB JSON.
+ */
+export async function getPayoutSettings(): Promise<Record<string, unknown>> {
+  try {
+    const rows = await db()<{ value: unknown }[]>`
+      SELECT value FROM platform_settings WHERE key = 'payout_config' LIMIT 1
+    `;
+    const value = rows[0]?.value;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return value as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
 export async function getPayoutConfig(): Promise<PayoutConfig> {
   try {
     const rows = await db()<{ value: unknown }[]>`

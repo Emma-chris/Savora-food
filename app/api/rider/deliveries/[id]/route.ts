@@ -236,6 +236,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         throw ApiError.conflict("Pick up the order before marking it delivered.");
       }
       // OTP handshake: the order carries the customer-visible code (orders.delivery_otp).
+      let otpVerified = !delivery.require_otp;
       if (delivery.require_otp) {
         const supplied = (parsed.data.otp ?? parsed.data.code ?? "").trim();
         if (!supplied) throw ApiError.validation("Enter the 4-digit delivery code from the customer.");
@@ -247,14 +248,35 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
           await sql`UPDATE deliveries SET delivery_code_attempts = delivery_code_attempts + 1 WHERE id = ${id}`;
           throw ApiError.validation("Incorrect delivery code. It was not completed.");
         }
+        otpVerified = true;
       }
-      await sql.begin(async (tx) => {
-        await tx`UPDATE deliveries SET status = 'DELIVERED', delivered_at = NOW(), delivery_code_verified_at = NOW(), tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note) WHERE id = ${id}`;
+      // Earnings are credited in the SAME transaction that closes the delivery.
+      // It only reaches here once confirmation is proven (OTP verified above, or
+      // the order requires no code), and the guarded UPDATE below means a
+      // concurrent/replayed "deliver" loses the row and cannot credit twice.
+      const { creditRiderDeliveryTx } = await import("@/server/wallet");
+      const credited = await sql.begin(async (tx) => {
+        const updated = await tx<{ id: string }[]>`
+          UPDATE deliveries
+          SET status = 'DELIVERED', delivered_at = NOW(), delivery_code_verified_at = NOW(),
+              tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note)
+          WHERE id = ${id} AND status IN ('PICKED_UP', 'IN_TRANSIT')
+          RETURNING id
+        `;
+        if (updated.length === 0) {
+          throw ApiError.conflict("This delivery was already closed.");
+        }
         await tx`UPDATE orders SET status = 'DELIVERED', updated_at = NOW() WHERE id = ${delivery.order_id}`;
         await tx`
           INSERT INTO order_status_history (order_id, status, note)
           VALUES (${delivery.order_id}, 'DELIVERED', ${parsed.data.note ?? "Delivery verified with code"})
         `;
+        return creditRiderDeliveryTx(tx, {
+          deliveryId: id,
+          riderId: rider.id,
+          orderId: delivery.order_id,
+          confirmed: otpVerified,
+        });
       });
       // Ledger: split + transactions + vendor settlement (best-effort; delivery stays DELIVERED).
       try {
@@ -296,7 +318,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
             const { creditVendorForOrder } = await import("@/server/wallet");
             await creditVendorForOrder(delivery.order_id);
           } catch {
-            // auditable via missing CREDIT_HOLD ledger entry; delivery stays DELIVERED
+            // auditable via missing hold ledger entry; delivery stays DELIVERED
           }
         }
       } catch {
@@ -314,15 +336,34 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
           data: { orderId: delivery.order_id, status: "DELIVERED" },
         });
       }
-      return NextResponse.json(ok({ status: "DELIVERED" }));
+      return NextResponse.json(
+        ok({
+          status: "DELIVERED",
+          earnings: { feeKobo: credited.feeKobo, fee: credited.feeKobo / 100, credited: credited.credited },
+        }),
+      );
     }
 
     // fail
     if (["DELIVERED", "FAILED", "CANCELLED"].includes(delivery.status)) {
       throw ApiError.conflict("This delivery is already closed.");
     }
-    await sql.begin(async (tx) => {
-      await tx`UPDATE deliveries SET status = 'FAILED', tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note) WHERE id = ${id}`;
+    // Cancel BEFORE pickup: no fee. Cancel AFTER pickup: a configurable partial
+    // fee (cancelled_pickup_fee_pct of the rider fee) is credited to the rider
+    // who travelled — they should not eat the leg for free. Credited in the same
+    // transaction as the status change, and idempotent per delivery.
+    const pickedUp = ["PICKED_UP", "IN_TRANSIT", "DELIVERED"].includes(delivery.status);
+    const { creditCancelledPickupFeeTx } = await import("@/server/wallet");
+    const partial = await sql.begin(async (tx) => {
+      const updated = await tx<{ id: string }[]>`
+        UPDATE deliveries
+        SET status = 'FAILED', tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note)
+        WHERE id = ${id} AND status NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')
+        RETURNING id
+      `;
+      if (updated.length === 0) {
+        throw ApiError.conflict("This delivery was already closed.");
+      }
       await tx`
         UPDATE orders SET status = 'READY_FOR_PICKUP', delivery_partner_id = NULL, updated_at = NOW()
         WHERE id = ${delivery.order_id}
@@ -331,6 +372,12 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         INSERT INTO order_status_history (order_id, status, note)
         VALUES (${delivery.order_id}, 'READY_FOR_PICKUP', ${parsed.data.note ?? "Delivery failed; order released for reassignment"})
       `;
+      return creditCancelledPickupFeeTx(tx, {
+        deliveryId: id,
+        riderId: rider.id,
+        orderId: delivery.order_id,
+        pickedUp,
+      });
     });
     try {
       const { createDispatchOffers } = await import("@/server/dispatch");
@@ -345,7 +392,17 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         data: { orderId: delivery.order_id, status: "FAILED" },
       });
     }
-    return NextResponse.json(ok({ status: "FAILED" }));
+    return NextResponse.json(
+      ok({
+        status: "FAILED",
+        earnings: {
+          feeKobo: partial.feeKobo,
+          fee: partial.feeKobo / 100,
+          credited: partial.credited,
+          pickedUp,
+        },
+      }),
+    );
   } catch (error) {
     const { envelope, status } = toEnvelope(error);
     return NextResponse.json(envelope, { status });

@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
-import { requireVendor } from "@/server/auth/guard";
-import { getVendorContext } from "@/server/vendors";
+import { ROLES, requireRole } from "@/server/auth/guard";
+import { getRiderContext } from "@/server/riders";
 import { getPayoutAccount, savePayoutAccount } from "@/server/payouts";
 import type { Owner } from "@/server/wallet";
 
@@ -11,12 +11,16 @@ const saveSchema = z.object({
   bankCode: z.string().trim().min(1, "Select a bank.").max(20),
 });
 
-/** The vendor's saved transfer recipient (if any) + cooling state. */
+/**
+ * The rider's payout account. Same service the vendor rail uses — the owner
+ * row is derived from the session's rider profile, so a rider can never
+ * read or write another rider's bank details.
+ */
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireVendor(request);
-    const vendor = await getVendorContext(session.id);
-    const owner: Owner = { type: "VENDOR", id: vendor.id };
+    const session = await requireRole(request, [ROLES.DELIVERY_PARTNER]);
+    const rider = await getRiderContext(session.id);
+    const owner: Owner = { type: "RIDER", id: rider.id };
     return NextResponse.json(ok(await getPayoutAccount(owner)));
   } catch (error) {
     const { envelope, status } = toEnvelope(error);
@@ -24,21 +28,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * Verify + save the vendor's payout account. All logic (Paystack resolve,
- * recipient creation, cooling stamp) is shared with riders in
- * @/server/payouts — this route only resolves the owner from the session.
- */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireVendor(request);
-    const vendor = await getVendorContext(session.id);
+    const session = await requireRole(request, [ROLES.DELIVERY_PARTNER]);
+    const rider = await getRiderContext(session.id);
     const parsed = saveSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       throw ApiError.validation("Please fix the errors in your submission.", parsed.error.flatten().fieldErrors);
     }
 
-    const owner: Owner = { type: "VENDOR", id: vendor.id };
+    const owner: Owner = { type: "RIDER", id: rider.id };
     const saved = await savePayoutAccount(owner, parsed.data);
     return NextResponse.json(ok(saved), { status: saved.reused ? 200 : 201 });
   } catch (error) {

@@ -4,34 +4,53 @@ import { requireAdminUser } from "@/server/admin";
 import { db } from "@/server/db";
 import { koboToNaira, type WithdrawalRow } from "@/server/wallet";
 
-/** Finance view of vendor-initiated withdrawals (new Paystack-rail flow). */
+type PagedWithdrawal = {
+  id: string;
+  owner_type: string;
+  owner_id: string;
+  owner_name: string;
+  amount_kobo: string;
+  reference: string;
+  paystack_transfer_code: string | null;
+  status: string;
+  failure_reason: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  created_at: Date;
+};
+
+/**
+ * Finance view of payout withdrawals from BOTH rails. The owner name is
+ * resolved per owner_type with a LATERAL join (vendor business_name vs rider
+ * name) so no separate admin query is needed per owner type.
+ */
 export async function GET(request: NextRequest) {
   try {
     await requireAdminUser(request);
     const url = new URL(request.url);
     const status = url.searchParams.get("status")?.trim() || "";
-    const where = status
-      ? db()`w.status = ${status}`
-      : db()`TRUE`;
-    const rows = await db()<{
-      id: string;
-      vendor_id: string;
-      vendor_name: string;
-      amount_kobo: string;
-      reference: string;
-      paystack_transfer_code: string | null;
-      status: string;
-      failure_reason: string | null;
-      account_number: string | null;
-      account_name: string | null;
-      created_at: Date;
-    }[]>`
-      SELECT w.id, w.vendor_id, v.business_name AS vendor_name, w.amount_kobo::text,
+    const ownerType = url.searchParams.get("owner_type")?.trim().toUpperCase() || "";
+    const sql = db();
+    const rows = await sql<PagedWithdrawal[]>`
+      SELECT w.id, w.owner_type, w.owner_id,
+             o.owner_name,
+             w.amount_kobo::text AS amount_kobo,
              w.reference, w.paystack_transfer_code, w.status, w.failure_reason,
              w.account_number, w.account_name, w.created_at
-      FROM vendor_withdrawals w
-      JOIN vendors v ON v.id = w.vendor_id
-      WHERE ${where}
+      FROM withdrawals w
+      CROSS JOIN LATERAL (
+        SELECT
+          CASE w.owner_type
+            WHEN 'VENDOR' THEN COALESCE(v.business_name, 'Vendor')
+            WHEN 'RIDER' THEN COALESCE(r.name, 'Rider')
+            ELSE w.owner_type
+          END AS owner_name
+        FROM (SELECT 1) AS x
+        LEFT JOIN vendors v ON w.owner_type = 'VENDOR' AND v.id = w.owner_id
+        LEFT JOIN delivery_partners r ON w.owner_type = 'RIDER' AND r.id = w.owner_id
+      ) AS o
+      WHERE (${status === ""} OR w.status = ${status})
+        AND (${ownerType === ""} OR w.owner_type = ${ownerType})
       ORDER BY w.created_at DESC
       LIMIT 50
     `;
@@ -39,8 +58,9 @@ export async function GET(request: NextRequest) {
       ok(
         rows.map((row) => ({
           id: row.id,
-          vendorId: row.vendor_id,
-          vendorName: row.vendor_name,
+          ownerType: row.owner_type,
+          ownerId: row.owner_id,
+          ownerName: row.owner_name,
           amountKobo: Number(row.amount_kobo),
           amount: koboToNaira(Number(row.amount_kobo)),
           reference: row.reference,

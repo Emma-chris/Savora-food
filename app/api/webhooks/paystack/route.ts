@@ -98,8 +98,8 @@ export async function POST(request: NextRequest) {
     const payload = JSON.parse(rawBody) as Record<string, unknown>;
     const event = typeof payload.event === "string" ? payload.event : "";
 
-    // Transfer rail (vendor withdrawals). The webhook is the source of truth
-    // for final status — failed/reversed events restore the vendor balance.
+  // Payout rail (vendor AND rider withdrawals). The webhook is the source of
+  // truth for final status — failed/reversed events restore the owner's balance.
     if (event.startsWith("transfer.")) {
       return handleTransferEvent(payload, event);
     }

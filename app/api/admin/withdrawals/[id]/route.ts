@@ -4,21 +4,32 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { auditLog, requireAdminUser } from "@/server/admin";
 import { db } from "@/server/db";
 import {
+  applyAdjustment,
   failWithdrawalAndReverse,
-  markWithdrawalProcessing,
-  markWithdrawalSubmitted,
+  nairaToKobo,
+  type Owner,
   type WithdrawalRow,
 } from "@/server/wallet";
-import { PaystackTransferError, initiateTransfer } from "@/server/payments/transfers";
+import { initiateTransferAndRecord } from "@/server/payouts";
 
 const actionSchema = z.object({
-  action: z.enum(["approve", "reject"]),
+  action: z.enum(["approve", "reject", "bonus", "penalty"]),
   note: z.string().trim().max(500).optional().nullable(),
+  amountNaira: z.number().positive().max(10_000_000).optional(),
+  reason: z.string().trim().max(300).optional().nullable(),
+  // Only for bonus/penalty: which wallet to adjust.
+  ownerType: z.enum(["VENDOR", "RIDER"]).optional(),
+  ownerId: z.string().trim().uuid().optional(),
 });
 
 /**
- * Approve (executes the Paystack transfer for a PENDING large withdrawal) or
- * reject (restores the locked funds to the vendor's available balance).
+ * Finance review for BOTH rails:
+ *  - approve: executes the Paystack transfer for a PENDING large withdrawal
+ *    (vendor OR rider) and stamps the approving admin.
+ *  - reject: restores the locked funds to that owner's available balance.
+ *  - bonus / penalty: writes an available-balance ledger entry for a rider or
+ *    vendor. The SIGN comes from the action, never the client, so a penalty
+ *    can never be turned into a payout by tampering.
  */
 export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -30,7 +41,35 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     }
 
     const sql = db();
-    const rows = await sql<WithdrawalRow[]>`SELECT * FROM vendor_withdrawals WHERE id = ${id} LIMIT 1`;
+
+    if (parsed.data.action === "bonus" || parsed.data.action === "penalty") {
+      const { amountNaira, ownerType, ownerId } = parsed.data;
+      if (!amountNaira) throw ApiError.validation("Enter the amount for this adjustment.");
+      if (!ownerType || !ownerId) throw ApiError.validation("Select the wallet owner to adjust.");
+
+      const kind = parsed.data.action === "bonus" ? "bonus" : "penalty";
+      // Magnitude only: the sign is fixed by the action, so a penalty can never
+      // be flipped into a payout by tampering with the request.
+      const magnitude = nairaToKobo(amountNaira);
+      const owner: Owner = { type: ownerType, id: ownerId };
+      await applyAdjustment({
+        owner,
+        kind,
+        amountKobo: kind === "bonus" ? magnitude : -magnitude,
+        reason: parsed.data.reason ?? parsed.data.note ?? null,
+        adminId: admin.id,
+      });
+      await auditLog({
+        userId: admin.id,
+        action: `withdrawal.${kind}`,
+        entityType: "wallet",
+        entityId: ownerId,
+        meta: { ownerType, amountKobo: kind === "bonus" ? magnitude : -magnitude },
+      });
+      return NextResponse.json(ok({ status: kind.toUpperCase(), ownerType, ownerId }));
+    }
+
+    const rows = await sql<WithdrawalRow[]>`SELECT * FROM withdrawals WHERE id = ${id} LIMIT 1`;
     const withdrawal = rows[0];
     if (!withdrawal) throw ApiError.notFound("Withdrawal not found.");
     if (withdrawal.status !== "PENDING") {
@@ -44,57 +83,40 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         action: "withdrawal.reject",
         entityType: "withdrawal",
         entityId: id,
-        meta: { vendorId: withdrawal.vendor_id, amountKobo: Number(withdrawal.amount_kobo) },
+        meta: {
+          ownerType: withdrawal.owner_type,
+          ownerId: withdrawal.owner_id,
+          amountKobo: Number(withdrawal.amount_kobo),
+        },
       });
       return NextResponse.json(ok({ status: "FAILED", reversed: true }));
     }
 
-    // Approve: same deduct-after-commit guarantee already holds (funds were
-    // locked at request time), so execute the transfer now.
-    try {
-      const result = await initiateTransfer({
-        amountKobo: Number(withdrawal.amount_kobo),
-        recipientCode: withdrawal.recipient_code,
-        reference: withdrawal.reference,
-      });
-      if (result.requiresOtp) {
-        await markWithdrawalSubmitted({
-          withdrawalId: id,
-          status: "OTP",
-          transferCode: result.transferCode,
-          failureReason: "Paystack requires OTP confirmation. Approve the transfer in the Paystack dashboard.",
-        });
-      } else if (result.status === "success") {
-        await markWithdrawalSubmitted({ withdrawalId: id, status: "SUCCESS", transferCode: result.transferCode });
-      } else {
-        await markWithdrawalSubmitted({ withdrawalId: id, status: "PROCESSING", transferCode: result.transferCode });
-      }
-    } catch (error) {
-      if (error instanceof PaystackTransferError) {
-        if (error.ambiguous) {
-          await markWithdrawalProcessing(id, error.paystackMessage).catch(() => undefined);
-        } else {
-          await failWithdrawalAndReverse(id, error.paystackMessage).catch(() => undefined);
-        }
-        throw error;
-      }
-      await markWithdrawalProcessing(id, "Transfer initiation failed.").catch(() => undefined);
-      throw error;
-    }
+    // Approve: funds were already locked at request time, so executing now is
+    // safe. Ambiguous Paystack failures park as PROCESSING (webhook decides).
+    const updated = await initiateTransferAndRecord({
+      withdrawalId: id,
+      amountKobo: Number(withdrawal.amount_kobo),
+      recipientCode: withdrawal.recipient_code,
+      reference: withdrawal.reference,
+    });
 
     await sql`
-      UPDATE vendor_withdrawals SET approved_by = ${admin.id}, updated_at = NOW() WHERE id = ${id}
+      UPDATE withdrawals SET approved_by = ${admin.id}, updated_at = NOW() WHERE id = ${id}
     `;
     await auditLog({
       userId: admin.id,
       action: "withdrawal.approve",
       entityType: "withdrawal",
       entityId: id,
-      meta: { vendorId: withdrawal.vendor_id, amountKobo: Number(withdrawal.amount_kobo) },
+      meta: {
+        ownerType: withdrawal.owner_type,
+        ownerId: withdrawal.owner_id,
+        amountKobo: Number(withdrawal.amount_kobo),
+      },
     });
 
-    const updated = await sql<WithdrawalRow[]>`SELECT * FROM vendor_withdrawals WHERE id = ${id} LIMIT 1`;
-    return NextResponse.json(ok({ status: updated[0]?.status ?? "PROCESSING" }));
+    return NextResponse.json(ok({ status: updated.status }));
   } catch (error) {
     const { envelope, status } = toEnvelope(error);
     return NextResponse.json(envelope, { status });

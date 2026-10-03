@@ -602,24 +602,41 @@ export type PaystackBankOption = {
   code: string;
 };
 
-export function listVendorBanks() {
-  return apiGet<PaystackBankOption[]>("/vendor/banks").then((result) => result.data);
+/** Owner-agnostic payout helpers (vendors and riders share these endpoints). */
+export function listPayoutBanks() {
+  return apiGet<PaystackBankOption[]>("/payouts/banks").then((result) => result.data);
 }
 
-export function resolveVendorBankAccount(input: { account_number: string; bank_code: string }) {
+export function resolvePayoutBankAccount(input: { account_number: string; bank_code: string }) {
   return apiGet<{ accountNumber: string; accountName: string; bankId: number | null }>(
-    `/vendor/banks/resolve${queryString({ account_number: input.account_number, bank_code: input.bank_code })}`,
+    `/payouts/banks/resolve${queryString({ account_number: input.account_number, bank_code: input.bank_code })}`,
   ).then((result) => result.data);
 }
 
-export type VendorRecipient = {
+export function listVendorBanks() {
+  return listPayoutBanks();
+}
+
+export function resolveVendorBankAccount(input: { account_number: string; bank_code: string }) {
+  return resolvePayoutBankAccount(input);
+}
+
+// ── Payout rail types (shared by vendors and riders) ──────────────────────
+export type PayoutRecipient = {
   recipientCode: string | null;
   bankCode: string | null;
   bankName: string | null;
   accountName: string | null;
   accountNumber: string | null;
   verified: boolean;
+  /** When the payout account last changed (starts the cooling window). */
+  changedAt: string | null;
+  coolingHours: number;
+  coolingActive: boolean;
+  coolingEndsAt: string | null;
 };
+
+export type VendorRecipient = PayoutRecipient;
 
 export function getVendorRecipient() {
   return apiGet<VendorRecipient>("/vendor/recipient").then((result) => result.data);
@@ -633,7 +650,7 @@ export function saveVendorRecipient(input: { accountNumber: string; bankCode: st
   ).then((result) => result.data);
 }
 
-export type VendorWithdrawal = {
+export type PayoutWithdrawal = {
   id: string;
   amountKobo: number;
   amount: number;
@@ -646,7 +663,10 @@ export type VendorWithdrawal = {
   message?: string;
 };
 
-export type VendorWithdrawals = {
+export type VendorWithdrawal = PayoutWithdrawal;
+
+export type PayoutOverview = {
+  ownerType: "VENDOR" | "RIDER";
   availableKobo: number;
   available: number;
   pendingKobo: number;
@@ -658,9 +678,13 @@ export type VendorWithdrawals = {
     max: number;
     autoApproveBelowKobo: number;
     autoApproveBelow: number;
+    holdDays: number;
   };
-  withdrawals: VendorWithdrawal[];
+  account: PayoutRecipient;
+  withdrawals: PayoutWithdrawal[];
 };
+
+export type VendorWithdrawals = PayoutOverview;
 
 export function listVendorWithdrawals() {
   return apiGet<VendorWithdrawals>("/vendor/withdrawals").then((result) => result.data);
@@ -1347,7 +1371,10 @@ export function getRiderDelivery(id: string) {
 export type RiderDeliveryAction = "going" | "arrived" | "pickup" | "in_transit" | "deliver" | "fail";
 
 export function riderDeliveryAction(id: string, action: RiderDeliveryAction, note?: string | null, otp?: string | null) {
-  return apiSend<{ status: string }>(`/rider/deliveries/${encodeURIComponent(id)}`, "PATCH", {
+  return apiSend<{
+    status: string;
+    earnings?: { feeKobo: number; fee: number; credited: boolean; pickedUp?: boolean };
+  }>(`/rider/deliveries/${encodeURIComponent(id)}`, "PATCH", {
     action,
     ...(note ? { note } : {}),
     ...(otp ? { otp } : {}),
@@ -1365,6 +1392,27 @@ export type RiderEarnings = {
 
 export function getRiderEarnings() {
   return apiGet<RiderEarnings>("/rider/earnings").then((result) => result.data);
+}
+
+/** Rider payout account + wallet + withdrawal history (same rail as vendors). */
+export function getRiderRecipient() {
+  return apiGet<PayoutRecipient>("/rider/recipient").then((result) => result.data);
+}
+
+export function saveRiderRecipient(input: { accountNumber: string; bankCode: string }) {
+  return apiSend<{ recipientCode: string; accountName?: string; accountNumber?: string; reused?: boolean }>(
+    "/rider/recipient",
+    "POST",
+    input,
+  ).then((result) => result.data);
+}
+
+export function listRiderWithdrawals() {
+  return apiGet<PayoutOverview>("/rider/withdrawals").then((result) => result.data);
+}
+
+export function requestRiderWithdrawal(input: { amountKobo: number; idempotencyKey?: string }) {
+  return apiSend<PayoutWithdrawal>("/rider/withdrawals", "POST", input).then((result) => result.data);
 }
 
 // ── Favorites (customers) ─────────────────────────────────────────────────
